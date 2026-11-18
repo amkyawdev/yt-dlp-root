@@ -16,6 +16,8 @@ const overrides = (typeof window !== 'undefined' && window.AUDIOTEXT_CONFIG) || 
 
 export const AppConstants = Object.freeze({
   appName: 'AudioText Extractor',
+  /** Shipped version; compared against the latest GitHub release tag. */
+  appVersion: '1.0.0',
 
   // ── endpoints ──────────────────────────────────────────────────────────
   /** Cloudflare Worker base. Empty => same-origin. */

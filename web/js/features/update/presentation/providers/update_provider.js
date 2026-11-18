@@ -24,7 +24,7 @@ export function isNewer(latest, current) {
 }
 
 export class UpdateProvider {
-  constructor({ repo = AppConstants.githubRepo, currentVersion = '1.4.2' } = {}) {
+  constructor({ repo = AppConstants.githubRepo, currentVersion = AppConstants.appVersion } = {}) {
     this.repo = repo;
     this.currentVersion = currentVersion;
     this.state = { checking: false, release: null, available: false, error: null };
