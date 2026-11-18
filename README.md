@@ -358,13 +358,56 @@ https://cdn.amkyaw.dev/audiotext/
 
 ---
 
-## ၁၃။ လိုင်စင်
+## ၁၃။ Releases / ထုတ်ဝေထားသော Application
+
+Application ကို GitHub Releases မှာ ထုတ်ဝေထားပါတယ်။ Deploy လုပ်လိုသူတွေအတွက်
+အဆင်သင့် bundle (`.tar.gz` / `.zip`) ကို download လုပ်နိုင်ပါတယ်။
+
+**နောက်ဆုံး release:** https://github.com/amkyawdev/yt-dlp-root/releases/latest
+
+| Asset | အကြောင်း |
+|---|---|
+| `audiotext-extractor-<tag>.tar.gz` | deployable static bundle (tar) |
+| `audiotext-extractor-<tag>.zip` | deployable static bundle (zip) |
+| `SHA256SUMS.txt` | checksum များ |
+
+### Bundle ကို အသုံးပြုခြင်း
+
+```bash
+# download လုပ်ပြီး ဖြေလျှော့ပါ
+curl -L -O https://github.com/amkyawdev/yt-dlp-root/releases/download/v1.0.0/audiotext-extractor-v1.0.0.tar.gz
+tar -xzf audiotext-extractor-v1.0.0.tar.gz -C my-app
+
+# checksum စစ်ဆေးပါ
+sha256sum -c SHA256SUMS.txt
+
+# local မှာ လည်ပတ်ပါ (same-origin proxy လိုအပ်တယ်)
+cd my-app && node ../serve.mjs
+```
+
+Bundle ကို Cloudflare Pages / Netlify / Vercel / မည်သည့် static host မဆို ပေါ်မှာ
+တင်နိုင်ပါတယ် — ဒါပေမဲ့ **same-origin proxy route** တစ်ခု ထည့်ဖို့ မမေ့ပါနဲ့ (§၆)။
+
+### Release အသစ် ထုတ်ဝေခြင်း
+
+```bash
+git tag -a v1.0.1 -m "release notes"
+git push origin main --tags
+```
+
+`.github/workflows/release.yml` က `v*` tag တွေ့လျှင် အလိုအလျောက် —
+syntax စစ် → bundle တည်ဆောက် → `.tar.gz` + `.zip` + `SHA256SUMS.txt` ဖန်တီး →
+GitHub Release ထုတ်ဝေပါတယ်။
+
+---
+
+## ၁၄။ လိုင်စင်
 
 Apache License 2.0 — `LICENSE` ဖိုင်ကို ကြည့်ပါ။
 
 ---
 
-## ၁၄။ ပံ့ပိုးကူညီခြင်း (Contributing)
+## ၁၅။ ပံ့ပိုးကူညီခြင်း (Contributing)
 
 1. Feature branch တစ်ခု ဖန်တီးပါ: `git checkout -b feature/my-feature`
 2. ပြင်ဆင်ချက်များ commit လုပ်ပါ

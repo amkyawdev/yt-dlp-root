@@ -1,18 +1,23 @@
-name = "audiotext-extractor-proxy"
-main = "src/index.js"
+name = "yt-dlp"
+main = "app.js"
 compatibility_date = "2024-11-01"
 
-# The Worker only does CORS + YouTube proxying. No bindings, no storage,
-# no compute — so this config stays intentionally empty.
+# ── The published application ──────────────────────────────────────────────
+# This one Worker serves BOTH:
+#   • the static frontend (from ../web, via the ASSETS binding)
+#   • the same-origin /proxy + /health the app needs
+#
+# Why same-origin matters: yt-dlp runs in Pyodide and issues synchronous XHR,
+# which browsers forbid cross-origin. A separate *.workers.dev origin fails
+# with "Host is unreachable"; serving the proxy here avoids that entirely.
+#
+# Deploy:  npx wrangler deploy
+# Live:    https://yt-dlp.burme-vpn.workers.dev
+
+[assets]
+directory = "../web"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
 
 [observability]
 enabled = true
-
-# ── Deploy ────────────────────────────────────────────────────────────────
-#   npx wrangler deploy
-#
-# ── Local dev ─────────────────────────────────────────────────────────────
-#   npx wrangler dev --port 8787
-#
-# Then point the frontend at it:
-#   window.AUDIOTEXT_CONFIG.workerUrl = "http://localhost:8787"

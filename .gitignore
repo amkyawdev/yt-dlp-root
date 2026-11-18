@@ -6,6 +6,17 @@ node_modules/
 dist/
 *.log
 
+# android
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/out/
+android/.idea/
+android/captures/
+*.apk
+*.aab
+
 # secrets / local config — never commit these
 .env
 .env.*
