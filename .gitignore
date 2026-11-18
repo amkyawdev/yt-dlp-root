@@ -1,0 +1,24 @@
+# dependencies
+node_modules/
+.wrangler/
+
+# build output
+dist/
+*.log
+
+# secrets / local config — never commit these
+.env
+.env.*
+.dev.vars
+*.jks
+*.keystore
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# local agent state
+.openhands/

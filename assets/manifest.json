@@ -1,0 +1,27 @@
+{
+  "version": "1.5.0",
+  "runtime": {
+    "ffmpeg": "6.1.1",
+    "ytdlp": "2026.10.26"
+  },
+  "models": {
+    "tiny": {
+      "label": "tiny · q5_1",
+      "file": "ggml-tiny-q5_1.bin",
+      "bytes": 44040192,
+      "sha256": ""
+    },
+    "base": {
+      "label": "base · q5_1",
+      "file": "ggml-base-q5_1.bin",
+      "bytes": 62914560,
+      "sha256": ""
+    },
+    "small": {
+      "label": "small · q5_1",
+      "file": "ggml-small-q5_1.bin",
+      "bytes": 199229440,
+      "sha256": ""
+    }
+  }
+}

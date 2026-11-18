@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="color-scheme" content="dark" />
+<title>AudioText Extractor — browser-native audio → transcript</title>
+<meta name="description" content="Extract audio and transcribe YouTube videos or local media entirely in your browser. yt-dlp + FFmpeg + Whisper, all client-side." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300..800&family=Sora:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="styles.css" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230a0a0c'/%3E%3Cpath d='M6 16h3l2-6 3 12 3-9 2 3h5' fill='none' stroke='%23a855f7' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
+</head>
+<body>
+
+<!-- ═══ ATMOSPHERE ═══ -->
+<div class="atmos" aria-hidden="true">
+  <div class="atmos__grid"></div>
+  <div class="atmos__glow atmos__glow--violet"></div>
+  <div class="atmos__glow atmos__glow--cyan"></div>
+  <div class="atmos__scan"></div>
+  <div class="atmos__noise"></div>
+  <canvas id="matrix" class="atmos__matrix"></canvas>
+</div>
+
+<!-- ═══ APP BAR ═══ -->
+<header class="appbar glass">
+  <div class="appbar__brand">
+    <span class="logo" aria-hidden="true">
+      <svg viewBox="0 0 40 40" fill="none">
+        <defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#a855f7"/><stop offset="1" stop-color="#06b6d4"/></linearGradient></defs>
+        <path d="M7 20h4l3-9 4 18 4-13 2 4h6" stroke="url(#lg)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+        <rect x="3" y="3" width="34" height="34" rx="10" stroke="url(#lg)" stroke-width="1.3" opacity=".5"/>
+      </svg>
+    </span>
+    <div class="appbar__title">
+      <b>AUDIOTEXT<span class="dot">·</span>EXTRACTOR</b>
+      <small>client&#8209;side audio → transcript</small>
+    </div>
+  </div>
+
+  <div class="appbar__tools">
+    <button class="chip" id="workerChip" type="button" title="Cloudflare Worker health">
+      <span class="pulse-dot" id="workerDot"></span><span class="mono" id="workerLabel">worker · —</span>
+    </button>
+    <button class="chip" id="updateChip" type="button" title="Check for updates">
+      <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg>
+      <span class="mono" id="updateLabel">updates</span>
+    </button>
+    <button class="chip" id="cacheChip" type="button" title="Clear cached models">
+      <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6"/><path d="M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/></svg>
+      <span class="mono" id="cacheLabel">cache · —</span>
+    </button>
+    <button class="chip chip--icon" id="logToggle" type="button" aria-label="Toggle logs" aria-expanded="false">
+      <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M4 5h16M4 12h16M4 19h10"/></svg>
+      <span class="badge" id="logCount">0</span>
+    </button>
+  </div>
+</header>
+
+<!-- ═══ BOOTSTRAP BANNER ═══ -->
+<section class="boot glass" id="boot" aria-label="Preparing transcription engine">
+  <div class="boot__ring" id="bootRing" style="--p:0">
+    <svg viewBox="0 0 120 120" aria-hidden="true">
+      <defs><linearGradient id="rg" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#a855f7"/><stop offset=".55" stop-color="#06b6d4"/><stop offset="1" stop-color="#f59e0b"/></linearGradient></defs>
+      <circle class="boot__track" cx="60" cy="60" r="52"/>
+      <circle class="boot__prog" cx="60" cy="60" r="52"/>
+    </svg>
+    <span class="boot__pct mono" id="bootPct">0<sup>%</sup></span>
+  </div>
+  <div class="boot__body">
+    <div class="boot__head">
+      <h2 class="mono" id="bootStage">preparing engine</h2>
+      <span class="tag tag--violet mono" id="bootModel">whisper · tiny</span>
+    </div>
+    <div class="neonbar boot__bar"><i id="bootBar" style="width:0%"></i></div>
+    <div class="boot__meta mono">
+      <span id="bootStatus">checking cache…</span>
+      <span id="bootSpeed">— MB/s</span>
+      <span id="bootSize">— / —</span>
+    </div>
+  </div>
+  <div class="boot__actions">
+    <button class="minibtn mono" id="bootRetry" type="button" hidden>retry</button>
+    <button class="cta cta--ghost mono" id="bootSkip" type="button">continue without preload</button>
+  </div>
+</section>
+
+<!-- ═══ MAIN ═══ -->
+<main class="stage" id="stage">
+
+  <!-- ─── WORKBENCH ─── -->
+  <section class="view is-active" id="view-workbench" data-view="workbench" aria-label="Input">
+    <div class="grid">
+      <div class="col">
+        <!-- input modes -->
+        <div class="panel glass">
+          <div class="panel__head">
+            <h3 class="mono">// source</h3>
+            <div class="tabs" role="tablist">
+              <button class="tab is-on" role="tab" data-mode="youtube" aria-selected="true">YouTube</button>
+              <button class="tab" role="tab" data-mode="file" aria-selected="false">Local file</button>
+            </div>
+          </div>
+
+          <!-- youtube mode -->
+          <div class="mode is-on" id="modeYoutube">
+            <div class="field">
+              <svg viewBox="0 0 24 24" class="field__ico" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.1 0l3-3a5 5 0 0 0-7.1-7.1L11 4.8"/><path d="M14 11a5 5 0 0 0-7.1 0l-3 3a5 5 0 0 0 7.1 7.1L13 19.2"/></svg>
+              <input id="urlInput" class="mono" type="url" inputmode="url" spellcheck="false" autocomplete="off"
+                     placeholder="https://youtube.com/watch?v=…" aria-label="YouTube URL" />
+              <button class="field__btn mono" id="pasteBtn" type="button">paste</button>
+            </div>
+            <p class="hint mono">Resolved through your Cloudflare Worker so CORS never blocks yt-dlp.</p>
+            <div class="meta" id="ytMeta" hidden>
+              <img class="meta__thumb" id="ytThumb" alt="" />
+              <div class="meta__body">
+                <b id="ytTitle">—</b>
+                <span class="mono" id="ytUploader">—</span>
+              </div>
+              <span class="tag mono value--cyan" id="ytDuration">—:—</span>
+            </div>
+          </div>
+
+          <!-- local file mode -->
+          <div class="mode" id="modeFile">
+            <div class="drop" id="dropzone" tabindex="0" role="button" aria-label="Drop a media file or click to browse">
+              <svg viewBox="0 0 24 24" class="drop__ico" aria-hidden="true"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+              <b>Drop a video or audio file</b>
+              <span class="mono">mp4 · mkv · mov · webm · mp3 · wav · m4a</span>
+              <span class="cta cta--ghost mono drop__pick">browse files</span>
+              <input id="fileInput" type="file" accept="video/*,audio/*" hidden />
+            </div>
+            <div class="meta" id="fileMeta" hidden>
+              <span class="meta__glyph" aria-hidden="true">
+                <svg viewBox="0 0 24 24" class="ico"><path d="M14 3v5h5"/><path d="M6 3h8l5 5v13H6z"/></svg>
+              </span>
+              <div class="meta__body">
+                <b id="fileName">—</b>
+                <span class="mono" id="fileSize">—</span>
+              </div>
+              <button class="minibtn mono" id="fileClear" type="button">clear</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- options -->
+        <div class="panel glass">
+          <div class="panel__head"><h3 class="mono">// options</h3></div>
+          <div class="opt">
+            <span class="opt__k mono">whisper model</span>
+            <div class="pillrow" role="radiogroup" aria-label="Whisper model">
+              <button class="pill is-on" data-model="tiny" role="radio" aria-checked="true">tiny</button>
+              <button class="pill" data-model="base" role="radio" aria-checked="false">base</button>
+              <button class="pill" data-model="small" role="radio" aria-checked="false">small</button>
+            </div>
+          </div>
+          <div class="opt">
+            <span class="opt__k mono">language</span>
+            <div class="pillrow" role="radiogroup" aria-label="Language">
+              <button class="pill is-on" data-lang="auto" role="radio" aria-checked="true">auto</button>
+              <button class="pill" data-lang="my" role="radio" aria-checked="false">မြန်မာ</button>
+              <button class="pill" data-lang="en" role="radio" aria-checked="false">en</button>
+            </div>
+          </div>
+          <div class="opt">
+            <span class="opt__k mono">audio output</span>
+            <div class="pillrow" role="radiogroup" aria-label="Audio output">
+              <button class="pill is-on" data-format="original" role="radio" aria-checked="true">original</button>
+              <button class="pill" data-format="mp3" role="radio" aria-checked="false">mp3</button>
+              <button class="pill" data-format="wav" role="radio" aria-checked="false">wav 16k</button>
+            </div>
+          </div>
+          <div class="actions">
+            <button class="cta cta--primary mono" id="runBtn" type="button">
+              <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M5 3l14 9-14 9z"/></svg>
+              extract &amp; transcribe
+            </button>
+            <button class="cta cta--ghost mono" id="cancelBtn" type="button" hidden>cancel</button>
+          </div>
+        </div>
+
+        <!-- pipeline -->
+        <div class="panel glass">
+          <div class="panel__head">
+            <h3 class="mono">// pipeline</h3>
+            <span class="tag tag--violet mono" id="pipelineState">idle</span>
+          </div>
+          <ol class="pipe" id="pipeline">
+            <li class="pstep" data-step="resolve"><span class="pstep__dot"></span><div><b class="mono">resolve source</b><small class="mono">yt-dlp metadata · or local file probe</small></div><span class="pstep__pct mono">—</span></li>
+            <li class="pstep" data-step="download"><span class="pstep__dot"></span><div><b class="mono">acquire audio</b><small class="mono">worker proxy stream · or file read</small></div><span class="pstep__pct mono">—</span></li>
+            <li class="pstep" data-step="extract"><span class="pstep__dot"></span><div><b class="mono">extract track</b><small class="mono">ffmpeg.wasm · -vn</small></div><span class="pstep__pct mono">—</span></li>
+            <li class="pstep" data-step="convert"><span class="pstep__dot"></span><div><b class="mono">convert 16 kHz mono</b><small class="mono">pcm_s16le wav for whisper</small></div><span class="pstep__pct mono">—</span></li>
+            <li class="pstep" data-step="transcribe"><span class="pstep__dot"></span><div><b class="mono">transcribe</b><small class="mono">whisper wasm / webgpu</small></div><span class="pstep__pct mono">—</span></li>
+          </ol>
+        </div>
+      </div>
+
+      <!-- right column -->
+      <div class="col col--side">
+        <div class="panel glass">
+          <div class="panel__head">
+            <h3 class="mono">// audio preview</h3>
+            <span class="tag mono value--cyan" id="waveMeta">no source</span>
+          </div>
+          <div class="wave" id="wave" data-state="empty">
+            <div class="wave__bars" id="waveBars" aria-hidden="true"></div>
+            <div class="wave__scan" aria-hidden="true"></div>
+            <button class="wave__play" id="wavePlay" type="button" aria-label="Play extracted audio" disabled>
+              <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M7 4l13 8-13 8z"/></svg>
+            </button>
+            <audio id="waveAudio" hidden></audio>
+          </div>
+          <div class="wave__foot mono">
+            <span id="waveTime">00:00 / 00:00</span>
+            <span class="wave__spectrum" id="waveSpec" aria-hidden="true"><i id="waveSpecBar"></i></span>
+            <span id="waveBitrate">— kbps</span>
+          </div>
+        </div>
+
+        <div class="panel glass">
+          <div class="panel__head"><h3 class="mono">// runtime</h3><span class="tag mono value--gold" id="rtState">idle</span></div>
+          <div class="rt">
+            <div class="rt__row"><span class="mono label">worker</span><span class="mono" id="rtWorker">—</span></div>
+            <div class="rt__row"><span class="mono label">yt-dlp</span><span class="mono" id="rtYtdlp">not loaded</span></div>
+            <div class="rt__row"><span class="mono label">ffmpeg</span><span class="mono" id="rtFfmpeg">not loaded</span></div>
+            <div class="rt__row"><span class="mono label">whisper</span><span class="mono" id="rtWhisper">not loaded</span></div>
+            <div class="rt__row"><span class="mono label">cache</span><span class="mono" id="rtCache">—</span></div>
+          </div>
+          <p class="hint mono">Everything runs in this tab. No upload, no server transcription.</p>
+        </div>
+
+        <button class="cta cta--ghost mono" id="goResult" type="button">
+          <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M4 6h16M4 12h10M4 18h13"/></svg>
+          view transcript
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── RESULT ─── -->
+  <section class="view" id="view-result" data-view="result" aria-label="Transcript">
+    <div class="resultbar glass">
+      <div class="resultbar__meta">
+        <span class="tag tag--violet mono" id="resEngine">engine · —</span>
+        <span class="tag mono" id="resSegments">0 segments</span>
+        <span class="tag mono" id="resDuration">—</span>
+      </div>
+      <div class="resultbar__actions">
+        <button class="minibtn mono" id="copyTranscript" type="button">copy text</button>
+        <button class="minibtn mono" id="downloadTxt" type="button">.txt</button>
+        <button class="minibtn mono" id="downloadVtt" type="button">.vtt</button>
+        <button class="minibtn mono" id="downloadSrt" type="button">.srt</button>
+        <button class="minibtn minibtn--gold mono" id="downloadAudio" type="button" disabled>audio ↓</button>
+      </div>
+    </div>
+
+    <div class="panel glass panel--grow result">
+      <div class="segempty mono" id="resultEmpty">no transcript yet — run a source from the workbench</div>
+      <div class="seglist" id="seglist" aria-live="polite" hidden></div>
+    </div>
+  </section>
+</main>
+
+<!-- ═══ DOCK ═══ -->
+<nav class="dock glass" id="dock" aria-label="Views">
+  <span class="dock__ind" id="dockInd" aria-hidden="true"></span>
+  <button class="dock__item is-active" data-view="workbench" aria-label="Workbench">
+    <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/><circle cx="19" cy="17" r="2.2"/></svg>
+    <span class="mono">workbench</span>
+  </button>
+  <button class="dock__item" data-view="result" aria-label="Transcript">
+    <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M7 9h10M7 13h10M7 17h6"/></svg>
+    <span class="mono">transcript</span>
+  </button>
+  <button class="dock__item" data-view="logs" aria-label="Logs">
+    <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M4 5h16M4 12h16M4 19h10"/></svg>
+    <span class="mono">logs</span>
+  </button>
+</nav>
+
+<!-- ═══ LOG DRAWER ═══ -->
+<aside class="drawer glass" id="drawer" aria-label="Pipeline logs" aria-hidden="true">
+  <div class="drawer__grip" id="drawerGrip" aria-hidden="true"></div>
+  <header class="drawer__head">
+    <div class="drawer__title mono">
+      <span class="tl"></span><span class="tl tl--y"></span><span class="tl tl--g"></span>
+      <b>audiotext@local</b> ~ /var/log/pipeline
+    </div>
+    <div class="drawer__tools">
+      <button class="minibtn mono" id="logPause" type="button">pause</button>
+      <button class="minibtn mono" id="logClear" type="button">clear</button>
+      <button class="minibtn mono" id="logClose" type="button" aria-label="Close logs">esc</button>
+    </div>
+  </header>
+  <div class="drawer__body mono" id="logBody" role="log" aria-live="polite"></div>
+  <div class="drawer__foot mono">
+    <span id="logHint">streaming…</span><span class="drawer__caret">▍</span>
+  </div>
+</aside>
+
+<!-- ═══ UPDATE MODAL ═══ -->
+<div class="overlay" id="overlay" hidden>
+  <div class="modal glass" id="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <button class="modal__x" id="modalClose" type="button" aria-label="Close">&times;</button>
+    <div class="modal__glow" aria-hidden="true"></div>
+    <div class="modal__head">
+      <span class="tag tag--violet mono">release_channel · stable</span>
+      <h2 id="modalTitle" class="modal__title">Update available</h2>
+      <p class="modal__sub mono" id="modalSub">github.com/amkyawdev/yt-dlp-root</p>
+    </div>
+
+    <div class="relbar">
+      <div class="relbar__from mono"><small>installed</small><b id="relFrom">v1.4.2</b></div>
+      <div class="relbar__arrow mono" aria-hidden="true">&#8594;</div>
+      <div class="relbar__to mono"><small>latest</small><b id="relTo">v1.5.0</b></div>
+      <span class="relbar__size mono" id="relSize">source</span>
+    </div>
+
+    <div class="changelog">
+      <h4 class="mono">// changelog</h4>
+      <ul id="modalChangelog"></ul>
+    </div>
+
+    <div class="health">
+      <div class="health__row">
+        <span class="mono label">cloudflare worker</span>
+        <span class="health__v"><span class="pulse-dot pulse-dot--sm" id="modalDot"></span><span class="mono" id="modalPing">checking…</span></span>
+      </div>
+      <div class="health__bar"><i id="modalPingBar" style="width:42%"></i></div>
+      <div class="health__row">
+        <span class="mono label">r2 / cdn sync</span>
+        <span class="mono value--cyan" id="modalR2">in sync</span>
+      </div>
+    </div>
+
+    <div class="modal__actions">
+      <button class="cta cta--ghost mono" id="modalLater" type="button">remind me later</button>
+      <button class="cta cta--primary mono" id="modalUpdate" type="button">
+        <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
+        download update
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
